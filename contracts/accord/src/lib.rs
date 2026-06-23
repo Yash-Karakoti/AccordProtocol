@@ -20,20 +20,10 @@ pub enum ProposalStatus {
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum ProposalKind {
-    Transfer {
-        to: Address,
-        amount: i128,
-        token: Address,
-    },
-    AddOwner {
-        new_owner: Address,
-    },
-    RemoveOwner {
-        owner_to_remove: Address,
-    },
-    ChangeThreshold {
-        new_threshold: u32,
-    },
+    Transfer(Address, i128, Address), // (to, amount, token)
+    AddOwner(Address),               // (new_owner)
+    RemoveOwner(Address),           // (owner_to_remove)
+    ChangeThreshold(u32),           // (new_threshold)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -424,7 +414,7 @@ impl AccordContract {
             deadline,
             approvals: 0,
             status: ProposalStatus::Pending,
-            kind: ProposalKind::Transfer { to, amount, token },
+            kind: ProposalKind::Transfer(to, amount, token),
             ready_at: 0,
             threshold,
         };
@@ -497,7 +487,7 @@ impl AccordContract {
             deadline,
             approvals: 0,
             status: ProposalStatus::Pending,
-            kind: ProposalKind::AddOwner { new_owner },
+            kind: ProposalKind::AddOwner(new_owner),
             ready_at: 0,
             threshold,
         };
@@ -581,7 +571,7 @@ impl AccordContract {
             deadline,
             approvals: 0,
             status: ProposalStatus::Pending,
-            kind: ProposalKind::RemoveOwner { owner_to_remove },
+            kind: ProposalKind::RemoveOwner(owner_to_remove),
             ready_at: 0,
             threshold,
         };
@@ -653,7 +643,7 @@ impl AccordContract {
             deadline,
             approvals: 0,
             status: ProposalStatus::Pending,
-            kind: ProposalKind::ChangeThreshold { new_threshold },
+            kind: ProposalKind::ChangeThreshold(new_threshold),
             ready_at: 0,
             threshold,
         };
@@ -826,7 +816,7 @@ impl AccordContract {
 
         // Dispatch on proposal kind.
         match &proposal.kind {
-            ProposalKind::Transfer { to, amount, token } => {
+            ProposalKind::Transfer(to, amount, token) => {
                 if token::Client::new(&env, token)
                     .try_transfer(&env.current_contract_address(), to, amount)
                     .is_err()
@@ -834,14 +824,14 @@ impl AccordContract {
                     return Err(ContractError::TransferFailed);
                 }
             }
-            ProposalKind::AddOwner { new_owner } => {
+            ProposalKind::AddOwner(new_owner) => {
                 let mut owners = read_owners(&env)?;
                 owners.push_back(new_owner.clone());
                 let key = owners_key();
                 env.storage().persistent().set(&key, &owners);
                 bump_persistent(&env, &key);
             }
-            ProposalKind::RemoveOwner { owner_to_remove } => {
+            ProposalKind::RemoveOwner(owner_to_remove) => {
                 let owners = read_owners(&env)?;
                 let mut new_owners = Vec::new(&env);
                 for owner in owners.iter() {
@@ -853,7 +843,7 @@ impl AccordContract {
                 env.storage().persistent().set(&key, &new_owners);
                 bump_persistent(&env, &key);
             }
-            ProposalKind::ChangeThreshold { new_threshold } => {
+            ProposalKind::ChangeThreshold(new_threshold) => {
                 env.storage().instance().set(&threshold_key(), new_threshold);
                 bump_instance(&env);
             }
