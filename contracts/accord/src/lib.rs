@@ -19,16 +19,35 @@ pub enum ProposalStatus {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
+pub enum ProposalKind {
+    Transfer {
+        to: Address,
+        amount: i128,
+        token: Address,
+    },
+    AddOwner {
+        new_owner: Address,
+    },
+    RemoveOwner {
+        owner_to_remove: Address,
+    },
+    ChangeThreshold {
+        new_threshold: u32,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
 pub struct Proposal {
     pub id: u64,
     pub proposer: Address,
-    pub to: Address,
-    pub amount: i128,
-    pub token: Address,
     pub description: String,
     pub deadline: u64,
     pub approvals: u32,
     pub status: ProposalStatus,
+    pub kind: ProposalKind,
+    pub ready_at: u64,
+    pub threshold: u32,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -36,8 +55,6 @@ pub struct Proposal {
 pub struct ProposalCreatedEvent {
     pub id: u64,
     pub proposer: Address,
-    pub to: Address,
-    pub amount: i128,
     pub threshold: u32,
 }
 
@@ -63,8 +80,6 @@ pub struct ProposalRevokedEvent {
 pub struct ProposalExecutedEvent {
     pub id: u64,
     pub executor: Address,
-    pub to: Address,
-    pub amount: i128,
 }
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
@@ -94,6 +109,10 @@ pub enum ContractError {
     DuplicateOwner = 19,
     ArithmeticError = 20,
     InvalidDuration = 21,
+    InvalidRecipient = 22,
+    TimeLockActive = 23,
+    WouldBreakThreshold = 24,
+    OwnerNotFound = 25,
 }
 
 // ─── Storage Keys ────────────────────────────────────────────────────────────
@@ -124,6 +143,10 @@ fn approval_key(proposal_id: u64, owner: &Address) -> (Symbol, u64, Address) {
 
 fn active_count_key() -> Symbol {
     symbol_short!("ACTCNT")
+}
+
+fn timelock_key() -> Symbol {
+    symbol_short!("TLOCK")
 }
 
 // ─── TTL Constants ───────────────────────────────────────────────────────────
@@ -162,7 +185,10 @@ const MAX_PROPOSAL_DURATION: u64 = 7_776_000;
 // ─── Storage Helpers ─────────────────────────────────────────────────────────
 
 fn is_initialized(env: &Env) -> bool {
-    env.storage().instance().get::<_, bool>(&init_key()).unwrap_or(false)
+    env.storage()
+        .instance()
+        .get::<_, bool>(&init_key())
+        .unwrap_or(false)
 }
 
 fn read_threshold(env: &Env) -> Result<u32, ContractError> {
@@ -250,7 +276,7 @@ fn require_owner(env: &Env, address: &Address) -> Result<(), ContractError> {
     Err(ContractError::Unauthorized)
 }
 
-fn derive_status(env: &Env, proposal: &Proposal, threshold: u32) -> ProposalStatus {
+fn derive_status(env: &Env, proposal: &Proposal) -> ProposalStatus {
     // Terminal statuses are never overridden.
     if matches!(
         proposal.status,
@@ -262,7 +288,7 @@ fn derive_status(env: &Env, proposal: &Proposal, threshold: u32) -> ProposalStat
     if now > proposal.deadline {
         return ProposalStatus::Expired;
     }
-    if proposal.approvals >= threshold {
+    if proposal.approvals >= proposal.threshold {
         ProposalStatus::Ready
     } else {
         ProposalStatus::Pending
@@ -284,15 +310,19 @@ pub struct AccordContract;
 
 #[contractimpl]
 impl AccordContract {
-    /// One-shot initializer. Sets the list of owners and the approval threshold.
+    /// One-shot initializer. Sets the list of owners, the approval threshold,
+    /// and an optional time-lock delay (in seconds). A delay of 0 means no
+    /// time-lock is enforced.
     ///
     /// # Arguments
     /// * `owners` - Non-empty list of unique owner addresses (max 20).
     /// * `threshold` - Number of approvals required to execute a proposal (1 ≤ threshold ≤ owners.len()).
+    /// * `time_lock_delay` - Seconds to wait after a proposal reaches threshold before it is executable.
     pub fn initialize(
         env: Env,
         owners: Vec<Address>,
         threshold: u32,
+        time_lock_delay: u64,
     ) -> Result<(), ContractError> {
         if is_initialized(&env) {
             return Err(ContractError::AlreadyInitialized);
@@ -325,6 +355,7 @@ impl AccordContract {
         bump_persistent(&env, &key);
 
         env.storage().instance().set(&threshold_key(), &threshold);
+        env.storage().instance().set(&timelock_key(), &time_lock_delay);
         env.storage().instance().set(&init_key(), &true);
         bump_instance(&env);
 
@@ -335,7 +366,7 @@ impl AccordContract {
     ///
     /// # Arguments
     /// * `proposer` - Owner proposing the transfer. Must authorize.
-    /// * `to` - Recipient address.
+    /// * `to` - Recipient address. Must not be the contract's own address.
     /// * `amount` - Amount in the token's smallest unit. Must be > 0.
     /// * `token` - Token contract address implementing the Soroban token interface.
     /// * `description` - Human-readable description (max 300 chars).
@@ -372,6 +403,10 @@ impl AccordContract {
 
         validate_token(&env, &token)?;
 
+        if to == env.current_contract_address() {
+            return Err(ContractError::InvalidRecipient);
+        }
+
         let active = read_active_count(&env);
         if active >= MAX_ACTIVE_PROPOSALS {
             return Err(ContractError::TooManyActiveProposals);
@@ -385,13 +420,13 @@ impl AccordContract {
         let proposal = Proposal {
             id,
             proposer: proposer.clone(),
-            to: to.clone(),
-            amount,
-            token: token.clone(),
             description,
             deadline,
             approvals: 0,
             status: ProposalStatus::Pending,
+            kind: ProposalKind::Transfer { to, amount, token },
+            ready_at: 0,
+            threshold,
         };
         write_proposal(&env, &proposal);
         write_active_count(&env, active + 1);
@@ -401,8 +436,235 @@ impl AccordContract {
             ProposalCreatedEvent {
                 id,
                 proposer,
-                to,
-                amount,
+                threshold,
+            },
+        );
+
+        Ok(id)
+    }
+
+    /// Creates a proposal to add a new owner to the multisig.
+    pub fn create_add_owner_proposal(
+        env: Env,
+        proposer: Address,
+        new_owner: Address,
+        description: String,
+        deadline: u64,
+    ) -> Result<u64, ContractError> {
+        proposer.require_auth();
+        require_owner(&env, &proposer)?;
+
+        let owners = read_owners(&env)?;
+        for owner in owners.iter() {
+            if owner == new_owner {
+                return Err(ContractError::DuplicateOwner);
+            }
+        }
+
+        if owners.len() >= MAX_OWNERS {
+            return Err(ContractError::InvalidOwners);
+        }
+
+        if description.is_empty() {
+            return Err(ContractError::EmptyDescription);
+        }
+        if description.len() > MAX_DESCRIPTION_LEN {
+            return Err(ContractError::DescriptionTooLong);
+        }
+
+        let now = env.ledger().timestamp();
+        if deadline <= now {
+            return Err(ContractError::InvalidDeadline);
+        }
+        if deadline - now > MAX_PROPOSAL_DURATION {
+            return Err(ContractError::InvalidDuration);
+        }
+
+        let active = read_active_count(&env);
+        if active >= MAX_ACTIVE_PROPOSALS {
+            return Err(ContractError::TooManyActiveProposals);
+        }
+
+        let threshold = read_threshold(&env)?;
+        let id = read_next_id(&env);
+        let next_id = id.checked_add(1).ok_or(ContractError::ArithmeticError)?;
+        write_next_id(&env, next_id);
+
+        let proposal = Proposal {
+            id,
+            proposer: proposer.clone(),
+            description,
+            deadline,
+            approvals: 0,
+            status: ProposalStatus::Pending,
+            kind: ProposalKind::AddOwner { new_owner },
+            ready_at: 0,
+            threshold,
+        };
+        write_proposal(&env, &proposal);
+        write_active_count(&env, active + 1);
+
+        env.events().publish(
+            (symbol_short!("created"),),
+            ProposalCreatedEvent {
+                id,
+                proposer,
+                threshold,
+            },
+        );
+
+        Ok(id)
+    }
+
+    /// Creates a proposal to remove an existing owner from the multisig.
+    ///
+    /// # Arguments
+    /// * `proposer` - Owner proposing the removal. Must authorize.
+    /// * `owner_to_remove` - Address of the owner to remove. Must be a current owner,
+    ///   and removal must not leave fewer owners than the current threshold.
+    pub fn create_remove_owner_proposal(
+        env: Env,
+        proposer: Address,
+        owner_to_remove: Address,
+        description: String,
+        deadline: u64,
+    ) -> Result<u64, ContractError> {
+        proposer.require_auth();
+        require_owner(&env, &proposer)?;
+
+        let owners = read_owners(&env)?;
+        let threshold = read_threshold(&env)?;
+
+        let mut found = false;
+        for owner in owners.iter() {
+            if owner == owner_to_remove {
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            return Err(ContractError::OwnerNotFound);
+        }
+
+        if owners.len() <= threshold {
+            return Err(ContractError::WouldBreakThreshold);
+        }
+
+        if description.is_empty() {
+            return Err(ContractError::EmptyDescription);
+        }
+        if description.len() > MAX_DESCRIPTION_LEN {
+            return Err(ContractError::DescriptionTooLong);
+        }
+
+        let now = env.ledger().timestamp();
+        if deadline <= now {
+            return Err(ContractError::InvalidDeadline);
+        }
+        if deadline - now > MAX_PROPOSAL_DURATION {
+            return Err(ContractError::InvalidDuration);
+        }
+
+        let active = read_active_count(&env);
+        if active >= MAX_ACTIVE_PROPOSALS {
+            return Err(ContractError::TooManyActiveProposals);
+        }
+
+        let id = read_next_id(&env);
+        let next_id = id.checked_add(1).ok_or(ContractError::ArithmeticError)?;
+        write_next_id(&env, next_id);
+
+        let proposal = Proposal {
+            id,
+            proposer: proposer.clone(),
+            description,
+            deadline,
+            approvals: 0,
+            status: ProposalStatus::Pending,
+            kind: ProposalKind::RemoveOwner { owner_to_remove },
+            ready_at: 0,
+            threshold,
+        };
+        write_proposal(&env, &proposal);
+        write_active_count(&env, active + 1);
+
+        env.events().publish(
+            (symbol_short!("created"),),
+            ProposalCreatedEvent {
+                id,
+                proposer,
+                threshold,
+            },
+        );
+
+        Ok(id)
+    }
+
+    /// Creates a proposal to change the M-of-N approval threshold.
+    ///
+    /// # Arguments
+    /// * `proposer` - Owner proposing the change. Must authorize.
+    /// * `new_threshold` - The proposed new threshold. Must be ≥ 1 and ≤ current owner count.
+    pub fn create_change_threshold_proposal(
+        env: Env,
+        proposer: Address,
+        new_threshold: u32,
+        description: String,
+        deadline: u64,
+    ) -> Result<u64, ContractError> {
+        proposer.require_auth();
+        require_owner(&env, &proposer)?;
+
+        let owners = read_owners(&env)?;
+
+        if new_threshold == 0 || new_threshold > owners.len() {
+            return Err(ContractError::InvalidThreshold);
+        }
+
+        if description.is_empty() {
+            return Err(ContractError::EmptyDescription);
+        }
+        if description.len() > MAX_DESCRIPTION_LEN {
+            return Err(ContractError::DescriptionTooLong);
+        }
+
+        let now = env.ledger().timestamp();
+        if deadline <= now {
+            return Err(ContractError::InvalidDeadline);
+        }
+        if deadline - now > MAX_PROPOSAL_DURATION {
+            return Err(ContractError::InvalidDuration);
+        }
+
+        let active = read_active_count(&env);
+        if active >= MAX_ACTIVE_PROPOSALS {
+            return Err(ContractError::TooManyActiveProposals);
+        }
+
+        let threshold = read_threshold(&env)?;
+        let id = read_next_id(&env);
+        let next_id = id.checked_add(1).ok_or(ContractError::ArithmeticError)?;
+        write_next_id(&env, next_id);
+
+        let proposal = Proposal {
+            id,
+            proposer: proposer.clone(),
+            description,
+            deadline,
+            approvals: 0,
+            status: ProposalStatus::Pending,
+            kind: ProposalKind::ChangeThreshold { new_threshold },
+            ready_at: 0,
+            threshold,
+        };
+        write_proposal(&env, &proposal);
+        write_active_count(&env, active + 1);
+
+        env.events().publish(
+            (symbol_short!("created"),),
+            ProposalCreatedEvent {
+                id,
+                proposer,
                 threshold,
             },
         );
@@ -413,6 +675,7 @@ impl AccordContract {
     /// Approves a proposal. The approver must be an owner and must not have already approved.
     ///
     /// Automatically transitions the proposal to `Ready` when the approval count reaches threshold.
+    /// Records `ready_at` the first time the threshold is crossed.
     pub fn approve(
         env: Env,
         approver: Address,
@@ -421,11 +684,10 @@ impl AccordContract {
         approver.require_auth();
         require_owner(&env, &approver)?;
 
-        let threshold = read_threshold(&env)?;
         let mut proposal = read_proposal(&env, proposal_id)?;
 
         // Refresh derived status so an already-expired proposal is caught here.
-        proposal.status = derive_status(&env, &proposal, threshold);
+        proposal.status = derive_status(&env, &proposal);
 
         if !matches!(
             proposal.status,
@@ -444,7 +706,13 @@ impl AccordContract {
             .approvals
             .checked_add(1)
             .ok_or(ContractError::ArithmeticError)?;
-        proposal.status = derive_status(&env, &proposal, threshold);
+
+        // Record the timestamp when the proposal first crosses the threshold.
+        if proposal.ready_at == 0 && proposal.approvals >= proposal.threshold {
+            proposal.ready_at = env.ledger().timestamp();
+        }
+
+        proposal.status = derive_status(&env, &proposal);
         write_proposal(&env, &proposal);
 
         env.events().publish(
@@ -453,7 +721,7 @@ impl AccordContract {
                 id: proposal_id,
                 approver,
                 approvals: proposal.approvals,
-                threshold,
+                threshold: proposal.threshold,
             },
         );
 
@@ -472,10 +740,9 @@ impl AccordContract {
         approver.require_auth();
         require_owner(&env, &approver)?;
 
-        let threshold = read_threshold(&env)?;
         let mut proposal = read_proposal(&env, proposal_id)?;
 
-        proposal.status = derive_status(&env, &proposal, threshold);
+        proposal.status = derive_status(&env, &proposal);
 
         if !matches!(
             proposal.status,
@@ -494,7 +761,7 @@ impl AccordContract {
             .approvals
             .checked_sub(1)
             .ok_or(ContractError::ArithmeticError)?;
-        proposal.status = derive_status(&env, &proposal, threshold);
+        proposal.status = derive_status(&env, &proposal);
         write_proposal(&env, &proposal);
 
         env.events().publish(
@@ -509,11 +776,12 @@ impl AccordContract {
         Ok(())
     }
 
-    /// Executes a `Ready` proposal by transferring tokens from the multisig contract
-    /// to the proposal's recipient address. Only owners may execute.
+    /// Executes a `Ready` proposal. For transfer proposals, tokens are sent to the recipient.
+    /// For governance proposals (AddOwner, RemoveOwner, ChangeThreshold), the corresponding
+    /// state change is applied. Only owners may execute.
     ///
-    /// The contract must hold at least `proposal.amount` of the proposal token
-    /// before this is called (funded by owners depositing tokens externally).
+    /// Enforces the time-lock delay: execution is blocked until `ready_at + time_lock_delay`
+    /// has elapsed.
     pub fn execute(
         env: Env,
         executor: Address,
@@ -522,10 +790,9 @@ impl AccordContract {
         executor.require_auth();
         require_owner(&env, &executor)?;
 
-        let threshold = read_threshold(&env)?;
         let mut proposal = read_proposal(&env, proposal_id)?;
 
-        proposal.status = derive_status(&env, &proposal, threshold);
+        proposal.status = derive_status(&env, &proposal);
 
         if matches!(proposal.status, ProposalStatus::Expired) {
             // Persist the expired status and free up the active slot.
@@ -538,22 +805,58 @@ impl AccordContract {
         }
 
         if !matches!(proposal.status, ProposalStatus::Ready) {
-            if proposal.approvals < threshold {
+            if proposal.approvals < proposal.threshold {
                 return Err(ContractError::ThresholdNotMet);
             }
             return Err(ContractError::ProposalNotActive);
         }
 
-        // Transfer tokens from this contract to the recipient.
-        if token::Client::new(&env, &proposal.token)
-            .try_transfer(
-                &env.current_contract_address(),
-                &proposal.to,
-                &proposal.amount,
-            )
-            .is_err()
-        {
-            return Err(ContractError::TransferFailed);
+        // Time-lock enforcement.
+        let time_lock_delay: u64 = env
+            .storage()
+            .instance()
+            .get(&timelock_key())
+            .unwrap_or(0);
+        if time_lock_delay > 0 {
+            let now = env.ledger().timestamp();
+            if now < proposal.ready_at.saturating_add(time_lock_delay) {
+                return Err(ContractError::TimeLockActive);
+            }
+        }
+
+        // Dispatch on proposal kind.
+        match &proposal.kind {
+            ProposalKind::Transfer { to, amount, token } => {
+                if token::Client::new(&env, token)
+                    .try_transfer(&env.current_contract_address(), to, amount)
+                    .is_err()
+                {
+                    return Err(ContractError::TransferFailed);
+                }
+            }
+            ProposalKind::AddOwner { new_owner } => {
+                let mut owners = read_owners(&env)?;
+                owners.push_back(new_owner.clone());
+                let key = owners_key();
+                env.storage().persistent().set(&key, &owners);
+                bump_persistent(&env, &key);
+            }
+            ProposalKind::RemoveOwner { owner_to_remove } => {
+                let owners = read_owners(&env)?;
+                let mut new_owners = Vec::new(&env);
+                for owner in owners.iter() {
+                    if owner != *owner_to_remove {
+                        new_owners.push_back(owner);
+                    }
+                }
+                let key = owners_key();
+                env.storage().persistent().set(&key, &new_owners);
+                bump_persistent(&env, &key);
+            }
+            ProposalKind::ChangeThreshold { new_threshold } => {
+                env.storage().instance().set(&threshold_key(), new_threshold);
+                bump_instance(&env);
+            }
         }
 
         proposal.status = ProposalStatus::Executed;
@@ -569,8 +872,6 @@ impl AccordContract {
             ProposalExecutedEvent {
                 id: proposal_id,
                 executor,
-                to: proposal.to.clone(),
-                amount: proposal.amount,
             },
         );
 
@@ -581,9 +882,8 @@ impl AccordContract {
 
     /// Returns the current state of a proposal with a derived status.
     pub fn get_proposal(env: Env, proposal_id: u64) -> Result<Proposal, ContractError> {
-        let threshold = read_threshold(&env)?;
         let mut proposal = read_proposal(&env, proposal_id)?;
-        proposal.status = derive_status(&env, &proposal, threshold);
+        proposal.status = derive_status(&env, &proposal);
         Ok(proposal)
     }
 
@@ -593,11 +893,6 @@ impl AccordContract {
             limit = 20;
         }
         let next_id = read_next_id(&env);
-        let threshold = env
-            .storage()
-            .instance()
-            .get(&threshold_key())
-            .unwrap_or(1_u32);
 
         let mut result = Vec::new(&env);
         let start = offset + 1;
@@ -605,7 +900,7 @@ impl AccordContract {
 
         for id in start..=end {
             if let Ok(mut proposal) = read_proposal(&env, id) {
-                proposal.status = derive_status(&env, &proposal, threshold);
+                proposal.status = derive_status(&env, &proposal);
                 result.push_back(proposal);
             }
         }
@@ -620,6 +915,14 @@ impl AccordContract {
     /// Returns the current approval threshold.
     pub fn get_threshold(env: Env) -> Result<u32, ContractError> {
         read_threshold(&env)
+    }
+
+    /// Returns the time-lock delay in seconds. A value of 0 means no delay.
+    pub fn get_time_lock_delay(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&timelock_key())
+            .unwrap_or(0)
     }
 
     /// Returns the total number of proposals ever created.
