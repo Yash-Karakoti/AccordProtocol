@@ -79,8 +79,8 @@ export function mapProposal(raw: any, threshold: number): Proposal {
     threshold,
     status: mapStatus(raw.status),
     deadline: formatDeadline(BigInt(raw.deadline)),
-    deadlineTs: Number(raw.deadline),
     createdAt: `proposal #${Number(raw.id)}`,
+    userHasApproved: false,
   };
 }
 
@@ -109,4 +109,15 @@ export async function getProposalsPaged(
   ]);
   const result = scValToNative(val);
   return Array.isArray(result) ? result : [];
+}
+
+export async function hasApproved(
+  walletAddress: string,
+  proposalId: number
+  ): Promise<boolean> {
+  const val = await simulateView("has_approved", [
+    nativeToScVal(walletAddress, { type: "address" }),
+    nativeToScVal(BigInt(proposalId), { type: "u64" }),
+  ]);
+  return scValToNative(val) as boolean;
 }

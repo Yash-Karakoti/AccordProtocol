@@ -1,24 +1,32 @@
 import { useState } from "react";
-import { Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { CreateProposalModal } from "./components/CreateProposalModal";
 import { DashboardPage } from "./pages/DashboardPage";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { OwnersPage } from "./pages/OwnersPage";
 import { useContract } from "./hooks/useContract";
 import { useWallet } from "./hooks/useWallet";
+<<<<<<< feature/wallet-ui-and-token-validation-23-26-30-34
 import { approveProposal, executeProposal } from "./lib/submit";
 
 type Page = "dashboard" | "history" | "settings" | "owners";
 import { ProposalCardSkeleton } from "./components/ProposalCardSkeleton";
+=======
+// CHANGE 1: Import revokeProposal from submit.ts
+import { approveProposal, executeProposal, revokeProposal } from "./lib/submit";
+
+type Page = "dashboard" | "history" | "settings";
+>>>>>>> main
 
 export default function App() {
+  const [page, setPage] = useState<Page>("dashboard");
   const [showCreate, setShowCreate] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
   const [txPending, setTxPending] = useState(false);
 
-  const { proposals, owners, stats, loading, error, refresh } = useContract();
   const wallet = useWallet();
+<<<<<<< feature/wallet-ui-and-token-validation-23-26-30-34
   const [copied, setCopied] = useState(false);
 
   function handleCopy() {
@@ -34,6 +42,10 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
+=======
+  // CHANGE 2: Pass wallet.address into useContract so it can fetch userHasApproved
+  const { proposals, owners, stats, loading, error, refresh } = useContract(wallet.address);
+>>>>>>> main
 
   const activeProposals = proposals.filter((p) =>
     ["pending", "ready"].includes(p.status)
@@ -64,13 +76,22 @@ export default function App() {
   const handleExecute = (id: number) =>
     withTx(() => executeProposal(wallet.address!, id));
 
+  // CHANGE 3: Create the handleRevoke function
+  const handleRevoke = (id: number) =>
+    withTx(() => revokeProposal(wallet.address!, id));
+
   function shortenAddr(addr: string) {
     return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+  }
+
+  function handleGoHome() {
+    setPage("dashboard");
   }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <header className="border-b border-zinc-800 px-6 py-4">
+        {/* ... (Keep your existing header code exactly the same) ... */}
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center text-xs font-bold text-black">
@@ -83,11 +104,16 @@ export default function App() {
           </div>
 
           <nav className="flex items-center gap-1">
+<<<<<<< feature/wallet-ui-and-token-validation-23-26-30-34
             {(["dashboard", "history", "owners", "settings"] as Page[]).map((navPage) => (
+=======
+            {(["dashboard", "history", "settings"] as Page[]).map((navPage) => (
+>>>>>>> main
               <button
                 key={navPage}
                 type="button"
                 onClick={() => setPage(navPage)}
+<<<<<<< feature/wallet-ui-and-token-validation-23-26-30-34
             {[
               { label: "dashboard", to: "/" },
               { label: "history", to: "/history" },
@@ -96,14 +122,16 @@ export default function App() {
               <Link
                 key={label}
                 to={to}
+=======
+>>>>>>> main
                 className={`text-sm px-3 py-1.5 rounded-lg capitalize transition-colors ${
-                  currentPath === to
+                  page === navPage
                     ? "bg-zinc-800 text-white"
                     : "text-zinc-500 hover:text-zinc-300"
                 }`}
               >
-                {label}
-              </Link>
+                {navPage}
+              </button>
             ))}
           </nav>
 
@@ -181,10 +209,8 @@ export default function App() {
         )}
 
         {loading ? (
-          <div className="space-y-3">
-            <ProposalCardSkeleton />
-            <ProposalCardSkeleton />
-            <ProposalCardSkeleton />
+          <div className="text-center py-16 text-zinc-500 text-sm">
+            Loading contract data…
           </div>
         ) : page === "dashboard" ? (
           <DashboardPage
@@ -194,10 +220,12 @@ export default function App() {
             walletAddress={wallet.address}
             onApprove={handleApprove}
             onExecute={handleExecute}
+            onRevoke={handleRevoke} /* CHANGE 4: Pass the handleRevoke function down to the Dashboard */
             onCreateProposal={() => setShowCreate(true)}
           />
         ) : page === "history" ? (
           <HistoryPage proposals={proposals} onApprove={handleApprove} />
+<<<<<<< feature/wallet-ui-and-token-validation-23-26-30-34
         ) : page === "owners" ? (
           <OwnersPage
             owners={owners}
@@ -210,36 +238,13 @@ export default function App() {
           />
         ) : page === "settings" ? (
           <SettingsPage stats={stats} />
+=======
+>>>>>>> main
         ) : (
+          <>
           <NotFoundPage onGoHome={handleGoHome} />
-        ) : (
           <SettingsPage stats={stats} />
           </>
-          <Routes>
-            <Route
-              path="/"
-              element={
-                <DashboardPage
-                  activeProposals={activeProposals}
-                  owners={owners}
-                  dashboardStats={stats}
-                  walletAddress={wallet.address}
-                  onApprove={handleApprove}
-                  onExecute={handleExecute}
-                  onCreateProposal={() => setShowCreate(true)}
-                />
-              }
-            />
-            <Route
-              path="/history"
-              element={<HistoryPage proposals={proposals} onApprove={handleApprove} />}
-            />
-            <Route
-              path="/settings"
-              element={<SettingsPage stats={stats} />}
-            />
-            <Route path="*" element={<NotFoundPage onGoHome={() => navigate("/")} />} />
-          </Routes>
         )}
       </main>
 

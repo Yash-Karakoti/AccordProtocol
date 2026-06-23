@@ -62,6 +62,7 @@ export function HistoryPage({
               walletAddress={null}
               onApprove={onApprove}
               onExecute={noop}
+              onRevoke={noop}
             />
           ))
         )}

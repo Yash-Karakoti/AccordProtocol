@@ -10,8 +10,8 @@ export type Proposal = {
   threshold: number;
   status: ProposalStatus;
   deadline: string;
-  deadlineTs: number;
   createdAt: string;
+  userHasApproved: boolean;
 };
 
 export type Owner = {

@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useState } from "react";
 import type { Proposal } from "../types/accord";
 import { ApprovalBar } from "./ApprovalBar";
 import { StatusBadge } from "./StatusBadge";
@@ -8,6 +7,7 @@ type ProposalCardProps = {
   walletAddress: string | null;
   onApprove: (id: number) => void;
   onExecute: (id: number) => void;
+  onRevoke: (id: number) => void;
 };
 
 export function ProposalCard({
@@ -15,44 +15,14 @@ export function ProposalCard({
   walletAddress,
   onApprove,
   onExecute,
+  onRevoke,
 }: ProposalCardProps) {
   const connected = !!walletAddress;
 
-  const getCountdownText = useCallback(() => {
-    if (proposal.status === "executed") {
-      return proposal.deadline;
-    }
-    const now = Math.floor(Date.now() / 1000);
-    const diff = proposal.deadlineTs - now;
-
-    if (diff <= 0) {
-      return "Expired";
-    }
-
-    const days = Math.floor(diff / 86400);
-    const hours = Math.floor((diff % 86400) / 3600);
-    const minutes = Math.floor((diff % 3600) / 60);
-    return `${days}d ${hours}h ${minutes}m`;
-  }, [proposal]);
-
-  const [countdown, setCountdown] = useState<string>(getCountdownText());
-
-  useEffect(() => {
-    if (proposal.status === "executed") {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setCountdown(getCountdownText());
-    }, 60000);
-
-    return () => clearInterval(interval);
-  }, [getCountdownText, proposal.status]);
-
   return (
-    <div className={`${proposal.status === "ready" ? "bg-emerald-500/5 border-emerald-500/40 hover:border-emerald-500/60" : "bg-zinc-900 border-zinc-800 hover:border-zinc-700"} rounded-xl p-4 transition-colors`}>
-      <div className="flex items-start justify-between mb-3">
-        <div>
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 hover:border-zinc-700 transition-colors">
+      <div className="flex items-start justify-between mb-4">
+        <div>  
           <p className="text-xs text-zinc-500 font-mono mb-1">
             Proposal #{proposal.id}
           </p>
@@ -75,27 +45,35 @@ export function ProposalCard({
         <ApprovalBar approvals={proposal.approvals} threshold={proposal.threshold} />
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-600">{countdown}</span>
+          <span className="text-xs text-zinc-600">{proposal.createdAt}</span>
 
-          {proposal.status === "pending" && (
+          {connected && !proposal.userHasApproved && proposal.status === "pending" && (
             <button
               type="button"
               onClick={() => onApprove(proposal.id)}
-              title={connected ? undefined : "Connect wallet to approve"}
               className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded-lg transition-colors font-medium disabled:opacity-50"
             >
-              {connected ? "Approve" : "Connect & Approve"}
+              Approve
             </button>
           )}
 
-          {proposal.status === "ready" && (
+          {connected && proposal.userHasApproved && (proposal.status === "pending" || proposal.status === "ready") && (
+            <button
+              type="button"
+              onClick={() => onRevoke(proposal.id)}
+              className="text-xs bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded-lg transition-colors font-medium disabled:opacity-50"
+            >
+              Revoke
+            </button>
+          )}
+
+          {connected && proposal.status === "ready" && (
             <button
               type="button"
               onClick={() => onExecute(proposal.id)}
-              title={connected ? undefined : "Connect wallet to execute"}
               className="text-xs bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded-lg transition-colors font-medium disabled:opacity-50"
             >
-              {connected ? "Execute" : "Connect & Execute"}
+              Execute
             </button>
           )}
         </div>

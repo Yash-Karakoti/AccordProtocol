@@ -15,8 +15,8 @@ export const MOCK_PROPOSALS: Proposal[] = [
     threshold: 3,
     status: "pending",
     deadline: "Jun 18, 2026",
-    deadlineTs: 1781737200,
     createdAt: "2 hours ago",
+    userHasApproved: false,
   },
   {
     id: 2,
@@ -28,8 +28,8 @@ export const MOCK_PROPOSALS: Proposal[] = [
     threshold: 3,
     status: "ready",
     deadline: "Jun 20, 2026",
-    deadlineTs: 1781910000,
     createdAt: "5 hours ago",
+    userHasApproved: false,
   },
   {
     id: 3,
@@ -41,8 +41,8 @@ export const MOCK_PROPOSALS: Proposal[] = [
     threshold: 3,
     status: "executed",
     deadline: "Jun 12, 2026",
-    deadlineTs: 1781218800,
     createdAt: "1 day ago",
+    userHasApproved: false,
   },
   {
     id: 4,
@@ -54,8 +54,8 @@ export const MOCK_PROPOSALS: Proposal[] = [
     threshold: 3,
     status: "expired",
     deadline: "Jun 8, 2026",
-    deadlineTs: 1780873200,
     createdAt: "3 days ago",
+    userHasApproved: false,
   },
 ];
 
