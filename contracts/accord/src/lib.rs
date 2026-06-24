@@ -32,6 +32,16 @@ pub enum ProposalKind {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
+pub enum ProposalCategory {
+    Transfer,
+    Payroll,
+    Grant,
+    Ops,
+    Other,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
 pub struct Proposal {
     pub id: u64,
     pub proposer: Address,
@@ -42,6 +52,7 @@ pub struct Proposal {
     pub kind: ProposalKind,
     pub ready_at: u64,
     pub threshold: u32,
+    pub category: ProposalCategory,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -50,6 +61,7 @@ pub struct ProposalCreatedEvent {
     pub id: u64,
     pub proposer: Address,
     pub threshold: u32,
+    pub category: ProposalCategory,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -389,6 +401,7 @@ impl AccordContract {
         token: Address,
         description: String,
         deadline: u64,
+        category: ProposalCategory,
     ) -> Result<u64, ContractError> {
         proposer.require_auth();
         require_owner(&env, &proposer)?;
@@ -437,6 +450,7 @@ impl AccordContract {
             kind: ProposalKind::Transfer(to, amount, token),
             ready_at: 0,
             threshold,
+            category: category.clone(),
         };
         write_proposal(&env, &proposal);
         write_active_count(&env, active + 1);
@@ -447,6 +461,7 @@ impl AccordContract {
                 id,
                 proposer,
                 threshold,
+                category,
             },
         );
 
