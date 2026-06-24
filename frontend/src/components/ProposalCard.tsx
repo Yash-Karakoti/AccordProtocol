@@ -9,6 +9,7 @@ type ProposalCardProps = {
   walletAddress: string | null;
   onApprove: (id: number) => void;
   onExecute: (id: number) => void;
+  onRevoke: (id: number) => void;
 };
 
 export function ProposalCard({
@@ -16,6 +17,7 @@ export function ProposalCard({
   walletAddress,
   onApprove,
   onExecute,
+  onRevoke,
 }: ProposalCardProps) {
   const connected = !!walletAddress;
 
@@ -37,8 +39,8 @@ export function ProposalCard({
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 hover:border-zinc-700 transition-colors">
-      <div className="flex items-start justify-between mb-3">
-        <div>
+      <div className="flex items-start justify-between mb-4">
+        <div>  
           <p className="text-xs text-zinc-500 font-mono mb-1">
             Proposal #{proposal.id}
           </p>
@@ -83,25 +85,33 @@ export function ProposalCard({
         <div className="flex items-center gap-2">
           <span className="text-xs text-zinc-600">{proposal.createdAt}</span>
 
-          {proposal.status === "pending" && (
+          {connected && !proposal.userHasApproved && proposal.status === "pending" && (
             <button
               type="button"
               onClick={() => onApprove(proposal.id)}
-              title={connected ? undefined : "Connect wallet to approve"}
               className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded-lg transition-colors font-medium disabled:opacity-50"
             >
-              {connected ? "Approve" : "Connect & Approve"}
+              Approve
             </button>
           )}
 
-          {proposal.status === "ready" && (
+          {connected && proposal.userHasApproved && (proposal.status === "pending" || proposal.status === "ready") && (
+            <button
+              type="button"
+              onClick={() => onRevoke(proposal.id)}
+              className="text-xs bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded-lg transition-colors font-medium disabled:opacity-50"
+            >
+              Revoke
+            </button>
+          )}
+
+          {connected && proposal.status === "ready" && (
             <button
               type="button"
               onClick={() => onExecute(proposal.id)}
-              title={connected ? undefined : "Connect wallet to execute"}
               className="text-xs bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded-lg transition-colors font-medium disabled:opacity-50"
             >
-              {connected ? "Execute" : "Connect & Execute"}
+              Execute
             </button>
           )}
         </div>

@@ -164,13 +164,13 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
                 },
                 {
-                  "i128": "5000000"
+                  "i128": "1000000"
                 },
                 {
                   "address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN"
                 },
                 {
-                  "string": "Grant"
+                  "string": "Valid token"
                 },
                 {
                   "u64": "87400"
@@ -405,7 +405,7 @@
                       "symbol": "description"
                     },
                     "val": {
-                      "string": "Grant"
+                      "string": "Valid token"
                     }
                   },
                   {
@@ -429,7 +429,7 @@
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
                         },
                         {
-                          "i128": "5000000"
+                          "i128": "1000000"
                         },
                         {
                           "address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN"

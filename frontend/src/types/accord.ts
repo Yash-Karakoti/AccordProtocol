@@ -12,6 +12,7 @@ export type Proposal = {
   deadline: string;
   createdAt: string;
   proposer: string;
+  userHasApproved: boolean;
 };
 
 export type Owner = {

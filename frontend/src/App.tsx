@@ -1,31 +1,57 @@
 import { useState } from "react";
+import { Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { CreateProposalModal } from "./components/CreateProposalModal";
 import { DashboardPage } from "./pages/DashboardPage";
-import { NotFoundPage } from "./pages/NotFoundPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { useContract } from "./hooks/useContract";
 import { useWallet } from "./hooks/useWallet";
-import { approveProposal, executeProposal } from "./lib/submit";
+import { useNotifications } from "./hooks/useNotifications";
+import { useEventPolling } from "./hooks/useEventPolling";
+import { approveProposal, executeProposal, revokeProposal } from "./lib/submit";
+import { ProposalCardSkeleton } from "./components/ProposalCardSkeleton";
+import { useEventPolling } from "./hooks/useEventPolling";
 
-type Page = "dashboard" | "history" | "settings";
+type Page = "dashboard" | "history" | "settings" | "owners";
+import { NotFoundPage } from "./pages/NotFoundPage";
 
 export default function App() {
-  const [page, setPage] = useState<Page>("dashboard");
   const [showCreate, setShowCreate] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
   const [txPending, setTxPending] = useState(false);
 
-  const { proposals, owners, stats, loading, error, refresh } = useContract();
   const wallet = useWallet();
+
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    if (!wallet.address) return;
+    try {
+      navigator.clipboard.writeText(wallet.address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore clipboard errors
+    }
+  }
+
+  const { proposals, owners, stats, loading, error, refresh } = useContract(wallet.address);
+
+  // Poll contract events on a 5 second base interval with exponential backoff on failure
+  useEventPolling(refresh, 5000);
+
+  // Wire push notifications for proposals pending approval
+  useNotifications(wallet.address, proposals);
+  
+  useEventPolling(refresh, 5000);
 
   const activeProposals = proposals.filter((p) =>
     ["pending", "ready"].includes(p.status)
   );
-
-  const historyProposals = proposals.filter((p) =>
-    ["executed", "expired", "revoked"].includes(p.status)
-  );
+  const { proposals, owners, stats, loading, error, refresh } = useContract(wallet.address);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPath = location.pathname;
 
   async function withTx(fn: () => Promise<void>) {
     if (!wallet.address) {
@@ -52,12 +78,11 @@ export default function App() {
   const handleExecute = (id: number) =>
     withTx(() => executeProposal(wallet.address!, id));
 
+  const handleRevoke = (id: number) =>
+    withTx(() => revokeProposal(wallet.address!, id));
+
   function shortenAddr(addr: string) {
     return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-  }
-
-  function handleGoHome() {
-    setPage("dashboard");
   }
 
   return (
@@ -73,23 +98,33 @@ export default function App() {
               testnet
             </span>
           </div>
+     
 
           <nav className="flex items-center gap-1">
-            {(["dashboard", "history", "settings"] as Page[]).map((navPage) => (
+            {(["dashboard", "history", "owners", "settings"] as Page[]).map((navPage) => (
               <button
                 key={navPage}
                 type="button"
                 onClick={() => setPage(navPage)}
+            {[
+              { label: "dashboard", to: "/" },
+              { label: "history", to: "/history" },
+              { label: "settings", to: "/settings" },
+            ].map(({ label, to }) => (
+              <Link
+                key={label}
+                to={to}
                 className={`text-sm px-3 py-1.5 rounded-lg capitalize transition-colors ${
-                  page === navPage
+                  currentPath === to
                     ? "bg-zinc-800 text-white"
                     : "text-zinc-500 hover:text-zinc-300"
                 }`}
               >
-                {navPage}
-              </button>
+                {label}
+              </Link>
             ))}
           </nav>
+
 
           {!wallet.installed ? (
             <a
@@ -122,9 +157,9 @@ export default function App() {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
-        {(txError || error) && !loading && (
+        {txError && (
           <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 mb-6 text-sm text-red-400 flex items-center justify-between">
-            <span>{txError ?? error}</span>
+            <span>{txError}</span>
             <button
               type="button"
               onClick={() => {
@@ -156,19 +191,54 @@ export default function App() {
             walletAddress={wallet.address}
             onApprove={handleApprove}
             onExecute={handleExecute}
+            onRevoke={handleRevoke}
             onCreateProposal={() => setShowCreate(true)}
           />
         ) : page === "history" ? (
-          <HistoryPage
-            historyProposals={historyProposals}
-            onApprove={handleApprove}
+          <HistoryPage proposals={proposals} onApprove={handleApprove} />
+        ) : page === "owners" ? (
+          <OwnersPage
+            owners={owners}
+            threshold={parseInt(stats.find((s) => s.label === "Threshold")?.value.split(" ")[0] || "0")}
+            totalOwners={owners.length}
           />
+        ) : page === "settings" ? (
+          <SettingsPage stats={stats} />
         ) : (
-          <>
-            <NotFoundPage onGoHome={handleGoHome} />
-            <SettingsPage stats={stats} />
-          </>
+          <NotFoundPage onGoHome={handleGoHome} />
         )}
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <DashboardPage
+                activeProposals={proposals.filter((p) =>
+                  ["pending", "ready"].includes(p.status)
+                )}
+                owners={owners}
+                dashboardStats={stats}
+                walletAddress={wallet.address}
+                onApprove={handleApprove}
+                onExecute={handleExecute}
+                onRevoke={handleRevoke}
+                onCreateProposal={() => setShowCreate(true)}
+                loading={loading}
+                error={error}
+              />
+            }
+          />
+          <Route
+            path="/history"
+            element={
+              <HistoryPage proposals={proposals} onApprove={handleApprove} />
+            }
+          />
+          <Route
+            path="/settings"
+            element={<SettingsPage stats={stats} />}
+          />
+          <Route path="*" element={<NotFoundPage onGoHome={() => navigate("/")} />} />
+        </Routes>
       </main>
 
       {showCreate && (

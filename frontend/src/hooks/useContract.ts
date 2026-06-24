@@ -5,6 +5,7 @@ import {
   getThreshold,
   getTotalProposals,
   mapProposal,
+  hasApproved,
 } from "../lib/contract";
 import type { DashboardStat, Owner, Proposal } from "../types/accord";
 
@@ -17,7 +18,7 @@ type ContractState = {
   refresh: () => void;
 };
 
-export function useContract(): ContractState {
+export function useContract(walletAddress: string | null): ContractState {
   const [tick, setTick] = useState(0);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [owners, setOwners] = useState<Owner[]>([]);
@@ -46,7 +47,24 @@ export function useContract(): ContractState {
 
         const mapped = raw.map((p) => mapProposal(p, thresh));
 
-        setProposals(mapped);
+        const proposalsWithApproval = await Promise.all(
+          mapped.map(async (p) => {
+            if (!walletAddress) {
+              return { ...p, userHasApproved: false };
+            }
+            try {
+              const approved = await hasApproved(walletAddress, p.id);
+              return { ...p, userHasApproved: approved };
+            } catch (err) {
+              console.error(`Failed to fetch approval for ${p.id}`, err);
+              return { ...p, userHasApproved: false };
+            }
+          })
+        );
+
+        if (cancelled) return;
+
+        setProposals(proposalsWithApproval);
         setOwners(
           ownerAddrs.map((addr, i) => ({
             address: `${addr.slice(0, 6)}...${addr.slice(-4)}`,
@@ -54,10 +72,10 @@ export function useContract(): ContractState {
           }))
         );
 
-        const active = mapped.filter((p) =>
+        const active = proposalsWithApproval.filter((p) =>
           ["pending", "ready"].includes(p.status)
         ).length;
-        const executed = mapped.filter((p) => p.status === "executed").length;
+        const executed = proposalsWithApproval.filter((p) => p.status === "executed").length;
 
         setStats([
           {
@@ -83,7 +101,7 @@ export function useContract(): ContractState {
     return () => {
       cancelled = true;
     };
-  }, [tick]);
+  }, [tick, walletAddress]);
 
   return { proposals, owners, stats, loading, error, refresh };
 }
