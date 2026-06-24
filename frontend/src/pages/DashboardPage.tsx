@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { DashboardStat, Owner, Proposal } from "../types/accord";
 import { ProposalCard } from "../components/ProposalCard";
 import { StatCard } from "../components/StatCard";
@@ -28,6 +29,12 @@ export function DashboardPage({
   loading,
   error,
 }: DashboardPageProps) {
+  const [sortByDeadline, setSortByDeadline] = useState(false);
+
+  const displayedProposals = sortByDeadline
+    ? [...activeProposals].sort((a, b) => a.deadlineTs - b.deadlineTs)
+    : activeProposals;
+
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
@@ -52,13 +59,24 @@ export function DashboardPage({
         )}
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold">Active Proposals</h2>
-        <button
-          type="button"
-          onClick={onCreateProposal}
-          className="text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg transition-colors"
-        >
-          + New
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 text-sm text-zinc-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={sortByDeadline}
+              onChange={(e) => setSortByDeadline(e.target.checked)}
+              className="accent-emerald-500"
+            />
+            Expiring first
+          </label>
+          <button
+            type="button"
+            onClick={onCreateProposal}
+            className="text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            + New
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -67,13 +85,13 @@ export function DashboardPage({
             <ProposalCardSkeleton />
             <ProposalCardSkeleton />
           </>
-        ) :  activeProposals.length === 0 ? (
+        ) : activeProposals.length === 0 ? (
           <div className="text-center py-16 text-zinc-500 text-sm">
             <p className="font-semibold mb-2">No active proposals</p>
-           
+
           </div>
         ) : (
-          activeProposals.map((proposal) => (
+          displayedProposals.map((proposal) => (
             <ProposalCard
               key={proposal.id}
               proposal={proposal}

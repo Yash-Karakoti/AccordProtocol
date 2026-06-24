@@ -6,16 +6,13 @@ import { useEventPolling } from "./hooks/useEventPolling";
 import { useNotifications } from "./hooks/useNotifications";
 import { useWallet } from "./hooks/useWallet";
 import { approveProposal, executeProposal, revokeProposal } from "./lib/submit";
-import { ProposalCardSkeleton } from "./components/ProposalCardSkeleton";
-
-type Page = "dashboard" | "history" | "settings" | "owners";
-import { NotFoundPage } from "./pages/NotFoundPage";
-import { OwnersPage } from "./pages/OwnersPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { OwnersPage } from "./pages/OwnersPage";
 import { SettingsPage } from "./pages/SettingsPage";
+
+type Page = "dashboard" | "history" | "settings" | "owners";
 
 const NAV_ITEMS = [
   { label: "dashboard", to: "/" },
@@ -56,11 +53,6 @@ export default function App() {
   const showReadOnlyBanner = Boolean(
     wallet.address && !loading && !error && !isOwner
   );
-  // const { proposals, owners, stats, loading, error, refresh } = useContract(wallet.address);
-  const navigate = useNavigate();
-  const location = useLocation();
-  const currentPath = location.pathname;
-
   async function withTx(fn: () => Promise<void>) {
     if (!wallet.address) {
       await wallet.connect();
@@ -118,23 +110,11 @@ export default function App() {
           </div>
 
           <nav className="flex items-center gap-1">
-            {(["dashboard", "history", "owners", "settings"] as Page[]).map((navPage) => (
-              <button
-                key={navPage}
-                type="button"
-                onClick={() => setPage(navPage)}>
-                  
-                </button>
-            ))}
-            {[
-              { label: "dashboard", to: "/" },
-              { label: "history", to: "/history" },
-              { label: "settings", to: "/settings" },
-            ].map(({ label, to }) => (
             {NAV_ITEMS.map(({ label, to }) => (
               <Link
                 key={label}
                 to={to}
+                onClick={() => setPage(label as Page)}
                 className={`rounded-lg px-3 py-1.5 text-sm capitalize transition-colors ${
                   location.pathname === to
                     ? "bg-zinc-800 text-white"
@@ -260,7 +240,7 @@ export default function App() {
             onRevoke={handleRevoke}
             onCreateProposal={() => setShowCreate(true)}
             error={null}
-            loading
+            loading={loading}
           />
         ) : page === "history" ? (
           <HistoryPage proposals={proposals} onApprove={handleApprove} />
