@@ -62,6 +62,38 @@ Known areas that require attention before mainnet:
 - Token contracts used in proposals follow the Soroban token interface and are not upgraded to malicious code after proposal creation. If that assumption fails, execution can transfer an asset the owners no longer intended to trust.
 - Owners remain available to participate in quorum when operational changes are needed. If they are not, urgent rotations or threshold changes can stall and leave the multisig in a risky intermediate state.
 
+## Threat Model
+
+### Attack Surfaces
+
+The protocol's attack surface includes the following external entry points:
+- **Public Contract Functions**: `create_proposal` (and variants), `approve`, `revoke`, `execute`, `cancel_expired` (planned), and `upgrade`. These are reachable by any actor via the Stellar network.
+- **Frontend Wallet Connection**: The boundary where the dApp interacts with browser-based wallets (Freighter). Malicious sites could attempt to intercept or spoof these calls.
+- **RPC Layer Boundary**: The communication path between the frontend and a Stellar RPC node. A compromised node can feed dishonest state data to the user.
+
+### Trust Assumptions
+
+Accord relies on several explicit assumptions for its security properties to hold:
+1. **Key Confidentiality**: Owner private keys are not compromised or shared.
+2. **Honest RPC Node**: The RPC node used by the frontend and integrators returns accurate ledger state.
+3. **Asset Integrity**: Token contracts passed to the multisig are non-malicious and do not contain backdoors or non-standard callback logic.
+4. **Soroban Platform**: The underlying Soroban runtime correctly enforces `require_auth` and handles cryptographic verification.
+
+### Mitigations
+
+Specific mechanisms are in place to enforce security boundaries:
+- **M-of-N Threshold Guard**: The `execute` and `upgrade` functions enforce a strict approval count, preventing single-key fund transfers or governance takeovers.
+- **Proposal Deadlines**: The `deadline` field and `derive_status` logic ensure proposals cannot be executed indefinitely, protecting against stale approvals.
+- **Active Proposal Cap**: The `MAX_ACTIVE_PROPOSALS` check in `create_proposal` prevents an attacker from exhausting contract storage.
+- **Owner-Only Authentication**: Every state-changing call (`approve`, `revoke`, etc.) uses `require_owner` to ensure only the authorized set can act.
+
+### Residual Risks
+
+The following risks are currently unmitigated by the protocol design:
+- **No SOS Recovery**: If enough owner keys are lost, there is no emergency "recovery" mode; the funds remain locked if the threshold cannot be met.
+- **Lack of Spending Limits**: There are no per-owner or per-day spending caps; once threshold is reached, any amount can be transferred.
+- **The Validation Gap**: A token contract could be upgraded to malicious code between a proposal's creation (where it is validated) and its execution.
+
 ## Responsible Disclosure
 
 **Do not open a public GitHub issue for a security vulnerability.**
