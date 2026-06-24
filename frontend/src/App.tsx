@@ -6,11 +6,6 @@ import { useEventPolling } from "./hooks/useEventPolling";
 import { useNotifications } from "./hooks/useNotifications";
 import { useWallet } from "./hooks/useWallet";
 import { approveProposal, executeProposal, revokeProposal } from "./lib/submit";
-import { ProposalCardSkeleton } from "./components/ProposalCardSkeleton";
-
-type Page = "dashboard" | "history" | "settings" | "owners";
-import { NotFoundPage } from "./pages/NotFoundPage";
-import { OwnersPage } from "./pages/OwnersPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -28,7 +23,6 @@ export default function App() {
   const [showCreate, setShowCreate] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
   const [txPending, setTxPending] = useState(false);
-  const [page, setPage] = useState<Page>("dashboard");
 
   const wallet = useWallet();
   const navigate = useNavigate();
@@ -56,10 +50,6 @@ export default function App() {
   const showReadOnlyBanner = Boolean(
     wallet.address && !loading && !error && !isOwner
   );
-  // const { proposals, owners, stats, loading, error, refresh } = useContract(wallet.address);
-  const navigate = useNavigate();
-  const location = useLocation();
-  const currentPath = location.pathname;
 
   async function withTx(fn: () => Promise<void>) {
     if (!wallet.address) {
@@ -99,10 +89,6 @@ export default function App() {
     return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
   }
 
-  function handleGoHome() {
-    setPage("dashboard");
-  }
-
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <header className="border-b border-zinc-800 px-6 py-4">
@@ -118,19 +104,6 @@ export default function App() {
           </div>
 
           <nav className="flex items-center gap-1">
-            {(["dashboard", "history", "owners", "settings"] as Page[]).map((navPage) => (
-              <button
-                key={navPage}
-                type="button"
-                onClick={() => setPage(navPage)}>
-                  
-                </button>
-            ))}
-            {[
-              { label: "dashboard", to: "/" },
-              { label: "history", to: "/history" },
-              { label: "settings", to: "/settings" },
-            ].map(({ label, to }) => (
             {NAV_ITEMS.map(({ label, to }) => (
               <Link
                 key={label}
@@ -249,29 +222,6 @@ export default function App() {
           <div className="py-16 text-center text-sm text-zinc-500">
             Loading contract data…
           </div>
-        ) : page === "dashboard" ? (
-          <DashboardPage
-            activeProposals={activeProposals}
-            owners={owners}
-            dashboardStats={stats}
-            walletAddress={wallet.address}
-            onApprove={handleApprove}
-            onExecute={handleExecute}
-            onRevoke={handleRevoke}
-            onCreateProposal={() => setShowCreate(true)}
-            error={null}
-            loading
-          />
-        ) : page === "history" ? (
-          <HistoryPage proposals={proposals} onApprove={handleApprove} />
-        ) : page === "owners" ? (
-          <OwnersPage
-            owners={owners}
-            threshold={parseInt(stats.find((s) => s.label === "Threshold")?.value.split(" ")[0] || "0")}
-            totalOwners={owners.length}
-          />
-        ) : page === "settings" ? (
-          <SettingsPage stats={stats} />
         ) : (
           <Routes>
             <Route
