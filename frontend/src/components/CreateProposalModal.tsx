@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createProposal } from "../lib/submit";
+import { createProposal, estimateCreateProposalFee } from "../lib/submit";
 import { displayToStroops } from "../lib/soroban";
 // Testnet token addresses — swap for mainnet when ready
 const TOKEN_ADDRESSES: Record<string, string> = {
@@ -28,6 +28,48 @@ export function CreateProposalModal({ walletAddress, onClose, onSubmitted }: Pro
   const [deadline, setDeadline] = useState(defaultDeadline);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const [feeEstimate, setFeeEstimate] = useState<number | null>(null);
+  const [feeLoading, setFeeLoading] = useState(false);
+  const [feeError, setFeeError] = useState(false);
+
+  const canCalculateFee = Boolean(
+    walletAddress && to.trim() && amount.trim() && description.trim()
+  );
+
+  async function handleCalculateFee() {
+    if (!canCalculateFee) return;
+
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0) return;
+
+    const tokenAddr = TOKEN_ADDRESSES[token];
+    if (!tokenAddr) return;
+
+    const deadlineMs = new Date(deadline).getTime();
+    const deadlineUnix = BigInt(Math.floor(deadlineMs / 1000));
+    const amountStroops = displayToStroops(amountNum);
+
+    setFeeLoading(true);
+    setFeeError(false);
+    setFeeEstimate(null);
+
+    try {
+      const fee = await estimateCreateProposalFee(
+        walletAddress as string,
+        to.trim(),
+        tokenAddr,
+        amountStroops,
+        description.trim(),
+        deadlineUnix
+      );
+      setFeeEstimate(fee);
+    } catch (e) {
+      setFeeError(true);
+    } finally {
+      setFeeLoading(false);
+    }
+  }
 
   async function handleSubmit() {
     if (!walletAddress) {
@@ -168,6 +210,32 @@ export function CreateProposalModal({ walletAddress, onClose, onSubmitted }: Pro
               className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-zinc-500"
             />
           </div>
+
+          {canCalculateFee && (
+            <div className="flex items-center justify-between bg-zinc-800/50 p-3 rounded-lg border border-zinc-700/50">
+              <div className="text-sm">
+                {feeLoading ? (
+                  <span className="text-zinc-400">Estimating fee…</span>
+                ) : feeError ? (
+                  <span className="text-red-400">Could not estimate fee</span>
+                ) : feeEstimate !== null ? (
+                  <span className="text-zinc-300">
+                    Estimated fee: <span className="text-white font-mono">~{feeEstimate.toFixed(7)} XLM</span>
+                  </span>
+                ) : (
+                  <span className="text-zinc-500">No estimate yet</span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleCalculateFee}
+                disabled={feeLoading}
+                className="text-xs bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white px-3 py-1.5 rounded-md transition-colors"
+              >
+                Calculate fee
+              </button>
+            </div>
+          )}
 
           {error && (
             <p className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
