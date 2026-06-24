@@ -197,10 +197,7 @@ export default function App() {
         ) : page === "settings" ? (
           <SettingsPage stats={stats} />
         ) : (
-          <>
           <NotFoundPage onGoHome={handleGoHome} />
-          <SettingsPage stats={stats} />
-          </>
         )}
         <Routes>
           <Route
