@@ -36,6 +36,7 @@ export default function App() {
   const [showCreate, setShowCreate] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
   const [txPending, setTxPending] = useState(false);
+  const [isStale, setIsStale] = useState(false);
 
   const wallet = useWallet();
   const navigate = useNavigate();
@@ -50,6 +51,7 @@ export default function App() {
     error,
     refresh,
     optimisticUpdate,
+    lastSuccessAt,
   } = useContract(wallet.address);
 
   useEventPolling(refresh, 5000);
@@ -64,6 +66,17 @@ export default function App() {
       setTxError("Wallet disconnected. Please reconnect and try again.");
     }
   }, [wallet.address, txPending]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (lastSuccessAt) {
+        setIsStale(Date.now() - lastSuccessAt > 60000);
+      } else {
+        setIsStale(false);
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [lastSuccessAt]);
 
   const activeProposals = proposals.filter((proposal) =>
     ["pending", "ready"].includes(proposal.status),
@@ -225,6 +238,12 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-4xl px-6 py-8">
+        {isStale && !loading && (
+          <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-400 font-medium">
+            Data may be out of date — last updated over 60 seconds ago.
+          </div>
+        )}
+
         {txError && (
           <div className="mb-6 flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
             <span>{txError}</span>
