@@ -234,34 +234,39 @@ If an issue is labeled for Wave eligibility, treat the label as informational on
 4. **Run local checks** (see [Testing and quality gates](#testing-and-quality-gates)).
 5. **Open a pull request** into the default branch with a clear title and description.
 6. **Respond to review feedback** in a timely way; it is normal to go through several review rounds.
+7. **After your PR merges**, clean up and move on (see below).
 
 If you discover that an issue is **wrongly scoped** or **blocked**, comment on the issue early rather than investing days of work in the wrong direction.
 
 ### What happens after you open a PR
 
-Once the pull request is open, maintainers will review it. You can expect a first review within a few days for non-trivial changes. Review comments appear directly on the PR under the "Files changed" tab or in the general conversation thread. A maintainer may also request a review from another contributor with domain expertise (for example, a contract change may be reviewed by someone familiar with Soroban patterns).
+Once your pull request is open, a maintainer will review it. Expect a first review within a few days; complex changes may take longer. Review comments appear directly on the PR in GitHub — on specific lines of code, on the overall diff, or as general discussion. Subscribe to email notifications for the PR so you do not miss feedback.
 
 ### Review and merge criteria
 
-Before a PR is merged, reviewers check the following:
+Reviewers check that the PR meets these conditions before approving:
 
-- **Tests pass** — all CI checks (contract tests, frontend build, lint) are green.
-- **Scope matches the issue** — the PR addresses the linked issue without unrelated changes.
-- **Coding standards followed** — the change matches the style and patterns of surrounding code.
-- **Description is complete** — the PR includes what changed, why, how to verify, and any known follow-ups.
-- **Tests added or updated** — behavior changes include test coverage where applicable.
+- **Tests pass.** All CI checks (contract tests, frontend lint, and frontend build) are green.
+- **Scope matches the issue.** The change addresses the issue it claims to fix without unrelated drive-by refactors.
+- **Coding standards followed.** The code matches the style and patterns described in [Coding standards](#coding-standards).
+- **Description is complete.** The PR description explains what changed, why, how to verify it, and links the relevant issue.
 
-Once all criteria are met, a maintainer will approve the PR and merge it into `main`. PRs that require significant changes may go through several review rounds before approval.
+Once all criteria are met, a maintainer approves the PR and merges it into `main`.
 
 ### Handling review feedback
 
-When a reviewer requests changes, push follow-up commits to the same branch. The new commits appear automatically in the open PR. Use the "Resolve conversation" button on each review comment thread once you have addressed the feedback. If you disagree with a suggestion, respond with a counter-argument explaining your reasoning — constructive back-and-forth is expected and welcome. If the discussion reaches an impasse, the maintainer makes the final call.
+When a reviewer requests changes:
+
+1. **Push follow-up commits** to the same branch. Do not open a new PR — the existing PR updates automatically.
+2. **Reply to each review comment** explaining what you changed or why you kept the current approach.
+3. **Mark comments as resolved** in the GitHub UI once the feedback has been addressed.
+4. If you disagree with feedback, **push back with a counter-argument** in the review thread. Explain your reasoning, link supporting references if applicable, and come to a consensus before proceeding. Reviewers are collaborators, not gatekeepers — discussion is expected.
 
 ### After your PR merges
 
-- The feature branch can be deleted (GitHub offers this automatically for branches in the same repo).
-- Your name and avatar appear in the commit history of the repository.
-- The change will be included in the next release — check [`CHANGELOG.md`](./CHANGELOG.md) for the version that ships your contribution.
+- **Delete your feature branch** to keep the repository tidy. GitHub offers a button for this after merge.
+- **Your name appears in the commit history** as a contributor to the project.
+- **Check the changelog** (`CHANGELOG.md`) to see your change listed in the next release, or follow the [issue tracker](https://github.com/thegreatfeez/accord-protocol/issues) for release announcements.
 
 ---
 
