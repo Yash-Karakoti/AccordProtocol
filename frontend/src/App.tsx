@@ -14,12 +14,11 @@ import { useWallet } from "./hooks/useWallet";
 import { approveProposal, executeProposal, revokeProposal } from "./lib/submit";
 import { DashboardPage } from "./pages/DashboardPage";
 import { HistoryPage } from "./pages/HistoryPage";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import { OwnersPage } from "./pages/OwnersPage";
 import { ProposalDetailPage } from "./pages/ProposalDetailPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { NotFoundPage } from "./pages/NotFoundPage";
-
-type Page = "dashboard" | "history" | "settings" | "owners";
+import type { Proposal } from "./types/accord";
 
 const NAV_ITEMS = [
   { label: "dashboard", to: "/app" },
@@ -27,6 +26,11 @@ const NAV_ITEMS = [
   { label: "owners", to: "/app/owners" },
   { label: "settings", to: "/app/settings" },
 ];
+
+type OptimisticPatch = {
+  id: number;
+  patch: Partial<Proposal>;
+};
 
 export default function App() {
   const [showCreate, setShowCreate] = useState(false);
@@ -39,6 +43,16 @@ export default function App() {
 
   const { proposals, owners, ownerAddresses, stats, loading, error, refresh } =
     useContract(wallet.address);
+  const {
+    proposals,
+    owners,
+    ownerAddresses,
+    stats,
+    loading,
+    error,
+    refresh,
+    optimisticUpdate,
+  } = useContract(wallet.address);
 
   useEventPolling(refresh, 5000);
   useNotifications(wallet.address, proposals);
@@ -52,7 +66,11 @@ export default function App() {
   const showReadOnlyBanner = Boolean(
     wallet.address && !loading && !error && !isOwner,
   );
-  async function withTx(fn: () => Promise<void>) {
+
+  async function withTx(
+    fn: () => Promise<void>,
+    optimisticPatch?: OptimisticPatch
+  ) {
     if (!wallet.address) {
       await wallet.connect();
       return;
@@ -76,18 +94,21 @@ export default function App() {
   }
 
   const handleApprove = (id: number) => {
-    const proposal = proposals.find((p) => p.id === id);
-    if (!proposal) return withTx(() => approveProposal(wallet.address!, id));
-    const newApprovals = proposal.approvals + 1;
-    const newStatus: ProposalStatus =
-      newApprovals >= proposal.threshold && proposal.status === "pending"
-        ? "ready"
-        : proposal.status;
+    const proposal = proposals.find((candidate) => candidate.id === id);
+    if (!proposal) {
+      return withTx(() => approveProposal(wallet.address!, id));
+    }
+
+    const approvals = proposal.approvals + 1;
+    const status = approvals >= proposal.threshold ? "ready" : proposal.status;
+
     return withTx(() => approveProposal(wallet.address!, id), {
       id,
       patch: {
         approvals: newApprovals,
         status: newStatus,
+        approvals,
+        status,
         userHasApproved: true,
       },
     });
@@ -96,11 +117,30 @@ export default function App() {
   const handleExecute = (id: number) =>
     withTx(() => executeProposal(wallet.address!, id), {
       id,
-      patch: { status: "executed" as ProposalStatus },
+      patch: { status: "executed" },
     });
 
-  const handleRevoke = (id: number) =>
-    withTx(() => revokeProposal(wallet.address!, id));
+  const handleRevoke = (id: number) => {
+    const proposal = proposals.find((candidate) => candidate.id === id);
+    if (!proposal) {
+      return withTx(() => revokeProposal(wallet.address!, id));
+    }
+
+    const approvals = Math.max(proposal.approvals - 1, 0);
+    const status =
+      approvals >= proposal.threshold && proposal.status === "ready"
+        ? "ready"
+        : "pending";
+
+    return withTx(() => revokeProposal(wallet.address!, id), {
+      id,
+      patch: {
+        approvals,
+        status,
+        userHasApproved: false,
+      },
+    });
+  };
 
   const thresholdStat = stats.find((stat) => stat.label === "Threshold");
   const threshold = Number.parseInt(
@@ -119,6 +159,7 @@ export default function App() {
           <Link
             to="/"
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+            className="flex items-center gap-3 transition-opacity hover:opacity-80"
           >
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500 text-xs font-bold text-black">
               A
@@ -135,6 +176,7 @@ export default function App() {
                 key={label}
                 to={to}
                 className={`rounded-lg px-3 py-1.5 text-sm capitalize transition-colors focus:ring-2 focus:ring-zinc-400 focus:outline-none ${
+                className={`rounded-lg px-3 py-1.5 text-sm capitalize transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
                   location.pathname === to ||
                   (to === "/app" && location.pathname === "/app/")
                     ? "bg-zinc-800 text-white"
@@ -151,7 +193,7 @@ export default function App() {
               href="https://www.freighter.app"
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-amber-500 focus:ring-2 focus:ring-zinc-400 focus:outline-none"
+              className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-amber-500 focus:outline-none focus:ring-2 focus:ring-zinc-400"
             >
               Install Freighter
             </a>
@@ -159,7 +201,7 @@ export default function App() {
             <button
               type="button"
               onClick={wallet.disconnect}
-              className="rounded-lg bg-zinc-800 px-4 py-1.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700 focus:ring-2 focus:ring-zinc-400 focus:outline-none"
+              className="rounded-lg bg-zinc-800 px-4 py-1.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
             >
               {shortenAddr(wallet.address)}
             </button>
@@ -168,7 +210,7 @@ export default function App() {
               type="button"
               onClick={wallet.connect}
               disabled={wallet.connecting}
-              className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50 focus:ring-2 focus:ring-zinc-400 focus:outline-none"
+              className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:opacity-50"
             >
               {wallet.connecting ? "Connecting…" : "Connect Wallet"}
             </button>
@@ -198,6 +240,10 @@ export default function App() {
             Your wallet network does not match this app. Expected network:{" "}
             {import.meta.env.VITE_NETWORK_PASSPHRASE}. Switch Freighter network
             to continue.
+          <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-400">
+            Your wallet network does not match this app. Expected network:{" "}
+            {import.meta.env.VITE_NETWORK_PASSPHRASE}. Switch Freighter network to
+            continue.
           </div>
         )}
 
