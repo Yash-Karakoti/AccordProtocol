@@ -26,10 +26,11 @@ Please read the [README](./README.md) first for product context, architecture, a
 
 ## Code of conduct and collaboration
 
+This project follows the [Contributor Covenant Code of Conduct](./CODE_OF_CONDUCT.md). By participating, you agree to uphold its standards.
+
 - **Be respectful and constructive.** Review comments should focus on the change, not the person.
 - **Assume good intent** and prefer clear questions over assumptions.
 - **Keep discussions on-topic** in issues and pull requests (PRs).
-- If the project adopts a formal Code of Conduct later, it will supersede this section; until then, these expectations apply to all spaces where the project is discussed (issues, PRs, chats linked from the repo).
 
 Harassment, discrimination, or abusive behavior are not acceptable. Maintainers may remove disruptive content and, when necessary, block participation to protect contributors.
 
@@ -202,6 +203,10 @@ Understanding where code belongs reduces review churn and merge conflicts.
 
 ## Finding work and program participation
 
+### Project roadmap
+
+Check [`ROADMAP.md`](./ROADMAP.md) for an overview of upcoming milestones, targeted features, and acceptance criteria. The roadmap helps you understand what is planned versus already shipped and where your contribution would have the most impact.
+
 ### GitHub issues
 
 - Use **open issues** as the primary source of scoped work.
@@ -229,8 +234,39 @@ If an issue is labeled for Wave eligibility, treat the label as informational on
 4. **Run local checks** (see [Testing and quality gates](#testing-and-quality-gates)).
 5. **Open a pull request** into the default branch with a clear title and description.
 6. **Respond to review feedback** in a timely way; it is normal to go through several review rounds.
+7. **After your PR merges**, clean up and move on (see below).
 
 If you discover that an issue is **wrongly scoped** or **blocked**, comment on the issue early rather than investing days of work in the wrong direction.
+
+### What happens after you open a PR
+
+Once your pull request is open, a maintainer will review it. Expect a first review within a few days; complex changes may take longer. Review comments appear directly on the PR in GitHub — on specific lines of code, on the overall diff, or as general discussion. Subscribe to email notifications for the PR so you do not miss feedback.
+
+### Review and merge criteria
+
+Reviewers check that the PR meets these conditions before approving:
+
+- **Tests pass.** All CI checks (contract tests, frontend lint, and frontend build) are green.
+- **Scope matches the issue.** The change addresses the issue it claims to fix without unrelated drive-by refactors.
+- **Coding standards followed.** The code matches the style and patterns described in [Coding standards](#coding-standards).
+- **Description is complete.** The PR description explains what changed, why, how to verify it, and links the relevant issue.
+
+Once all criteria are met, a maintainer approves the PR and merges it into `main`.
+
+### Handling review feedback
+
+When a reviewer requests changes:
+
+1. **Push follow-up commits** to the same branch. Do not open a new PR — the existing PR updates automatically.
+2. **Reply to each review comment** explaining what you changed or why you kept the current approach.
+3. **Mark comments as resolved** in the GitHub UI once the feedback has been addressed.
+4. If you disagree with feedback, **push back with a counter-argument** in the review thread. Explain your reasoning, link supporting references if applicable, and come to a consensus before proceeding. Reviewers are collaborators, not gatekeepers — discussion is expected.
+
+### After your PR merges
+
+- **Delete your feature branch** to keep the repository tidy. GitHub offers a button for this after merge.
+- **Your name appears in the commit history** as a contributor to the project.
+- **Check the changelog** (`CHANGELOG.md`) to see your change listed in the next release, or follow the [issue tracker](https://github.com/thegreatfeez/accord-protocol/issues) for release announcements.
 
 ---
 

@@ -5,6 +5,7 @@ const SECTIONS = [
   { id: "what-is-accord", label: "What is Accord?" },
   { id: "getting-started", label: "Getting Started" },
   { id: "proposal-lifecycle", label: "Proposal Lifecycle" },
+  { id: "approving-and-executing", label: "Approving & Executing" },
   { id: "creating-a-proposal", label: "Creating a Proposal" },
   { id: "owners-and-threshold", label: "Owners & Threshold" },
   { id: "faq", label: "FAQ" },
@@ -623,6 +624,95 @@ export function DocsPage() {
                   consensus requirement as the team evolves — for instance,
                   lowering the threshold after an owner is removed, or raising
                   it when a new owner joins.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="approving-and-executing"
+            className="scroll-mt-24 rounded-3xl border border-zinc-900 bg-zinc-950 p-8"
+          >
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-400">
+              Governance
+            </p>
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              Approving &amp; Executing
+            </h2>
+            <p className="mt-4 text-sm leading-7 text-zinc-400 sm:text-base">
+              Once a proposal exists on-chain, the multisig owners review it and
+              decide whether to approve. When enough owners approve, the proposal
+              becomes executable. This section explains who can take these actions,
+              how the threshold mechanism works, and what happens during and after
+              execution.
+            </p>
+
+            <div className="mt-8 space-y-8">
+              <div>
+                <h3 className="text-xl font-semibold text-white">
+                  Who Can Approve
+                </h3>
+                <p className="mt-3 text-sm leading-7 text-zinc-400 sm:text-base">
+                  Only addresses that are part of the multisig owners list can
+                  approve, revoke, or execute proposals. The contract checks the
+                  caller's authorization against the stored owners on every
+                  action. If your address is not in the owners list, the dashboard
+                  displays a read-only view of the proposals — you can observe
+                  the multisig activity but cannot sign or submit transactions.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold text-white">
+                  How the Threshold Works
+                </h3>
+                <p className="mt-3 text-sm leading-7 text-zinc-400 sm:text-base">
+                  Each owner may add exactly one approval per proposal. The
+                  approval count is stored on-chain and compared against the
+                  configured threshold — for example, a 2-of-3 multisig requires
+                  two approvals before a proposal is ready. The moment the
+                  approval count reaches the threshold, the proposal status
+                  automatically transitions from Pending to Ready.
+                </p>
+                <p className="mt-3 text-sm leading-7 text-zinc-400 sm:text-base">
+                  If an owner revokes their approval after the threshold has been
+                  reached and the count drops back below the threshold, the
+                  proposal status returns to Pending. This means the multisig can
+                  reconsider a proposal before execution as long as no owner has
+                  already executed it.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold text-white">
+                  Executing a Proposal
+                </h3>
+                <p className="mt-3 text-sm leading-7 text-zinc-400 sm:text-base">
+                  Any multisig owner can press Execute once a proposal has reached
+                  the Ready state. When executed, the contract transfers tokens
+                  directly from the multisig account to the recipient address
+                  specified in the proposal. For governance proposals — such as
+                  adding or removing an owner, or changing the threshold — the
+                  corresponding state change is applied instead of a token
+                  transfer.
+                </p>
+                <p className="mt-3 text-sm leading-7 text-zinc-400 sm:text-base">
+                  Execution is blocked if the proposal deadline has already passed.
+                  Expired proposals cannot be executed; they must be replaced with
+                  a new proposal if the action is still needed.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold text-white">
+                  After Execution
+                </h3>
+                <p className="mt-3 text-sm leading-7 text-zinc-400 sm:text-base">
+                  Once execution succeeds, the proposal moves to Executed status
+                  and is removed from the active list on the dashboard. You can
+                  find executed proposals in the history view, where the full
+                  lifecycle — who proposed it, who approved, and when it was
+                  executed — remains visible for audit purposes.
                 </p>
               </div>
             </div>

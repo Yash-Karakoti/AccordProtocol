@@ -8,7 +8,7 @@
       "name": "thegreatfeez",
       "avatar_url": "https://avatars.githubusercontent.com/u/thegreatfeez?v=4",
       "profile": "https://github.com/thegreatfeez",
-      "contributions": ["code", "doc", "ideas"]
+      "contributions": ["code", "doc", "ideas", "test", "infra"]
     }
   ],
   "contributorsPerLine": 7,
