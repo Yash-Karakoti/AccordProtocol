@@ -1,6 +1,8 @@
+import { useEffect, useRef, useState } from "react";
 import type { DashboardStat, Owner, Proposal } from "../types/accord";
 import { ProposalCard } from "../components/ProposalCard";
 import { StatCard } from "../components/StatCard";
+import { ProposalCardSkeleton } from "../components/ProposalCardSkeleton";
 
 type DashboardPageProps = {
   activeProposals: Proposal[];
@@ -11,6 +13,8 @@ type DashboardPageProps = {
   onExecute: (id: number) => void;
   onRevoke: (id: number) => void;
   onCreateProposal: () => void;
+  loading: boolean;
+  error: string | null;
 };
 
 export function DashboardPage({
@@ -22,7 +26,20 @@ export function DashboardPage({
   onExecute,
   onRevoke,
   onCreateProposal,
+  loading,
+  error,
 }: DashboardPageProps) {
+  const readyCount = activeProposals.filter((p) => p.status === "ready").length;
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const prevReadyCount = useRef(readyCount);
+
+  useEffect(() => {
+    if (readyCount > prevReadyCount.current) {
+      setBannerDismissed(false);
+    }
+    prevReadyCount.current = readyCount;
+  }, [readyCount]);
+
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
@@ -30,28 +47,74 @@ export function DashboardPage({
           <StatCard key={s.label} label={s.label} value={s.value} sub={s.sub} />
         ))}
       </div>
-
+       
+         {(error) && !loading && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 mb-6 text-sm text-red-400 flex items-center justify-between">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => {
+               
+              }}
+              className="underline hover:text-red-300 ml-4 shrink-0 focus:ring-2 focus:ring-zinc-400 focus:outline-none rounded"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+      {readyCount > 0 && !bannerDismissed && (
+        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 mb-6 text-sm text-emerald-400 flex items-center justify-between">
+          <span>
+            {readyCount} {readyCount === 1 ? "proposal is" : "proposals are"} ready to execute.
+          </span>
+          <button
+            type="button"
+            onClick={() => setBannerDismissed(true)}
+            aria-label="Dismiss"
+            className="hover:text-emerald-300 ml-4 shrink-0 focus:ring-2 focus:ring-zinc-400 focus:outline-none rounded"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold">Active Proposals</h2>
-        <button
-          type="button"
-          onClick={onCreateProposal}
-          className="text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg transition-colors"
-        >
-          + New
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 text-sm text-zinc-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={sortByDeadline}
+              onChange={(e) => setSortByDeadline(e.target.checked)}
+              className="accent-emerald-500"
+            />
+            Expiring first
+          </label>
+          <button
+            type="button"
+            onClick={onCreateProposal}
+            className="text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            + New
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3">
-        {activeProposals.length === 0 ? (
-          <p className="text-zinc-600 text-sm py-8 text-center">
-            No active proposals
-          </p>
+        {loading ? (
+          <>
+            <ProposalCardSkeleton />
+            <ProposalCardSkeleton />
+          </>
+        ) : activeProposals.length === 0 ? (
+          <div className="text-center py-16 text-zinc-500 text-sm">
+            <p className="font-semibold mb-2">No active proposals</p>
+
+          </div>
         ) : (
-          activeProposals.map((p) => (
+          displayedProposals.map((proposal) => (
             <ProposalCard
-              key={p.id}
-              proposal={p}
+              key={proposal.id}
+              proposal={proposal}
               walletAddress={walletAddress}
               onApprove={onApprove}
               onExecute={onExecute}

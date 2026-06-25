@@ -1,6 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Proposal, ProposalStatus } from "../types/accord";
 import { ProposalCard } from "../components/ProposalCard";
+import {
+  getProposalsPaged,
+  getTotalProposals,
+  getThreshold,
+  mapProposal,
+} from "../lib/contract";
 
 type Filter = "all" | ProposalStatus;
 
@@ -21,12 +27,73 @@ export function HistoryPage({
   onApprove: (id: number) => void;
 }) {
   const [activeTab, setActiveTab] = useState<Filter>("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [proposerFilter, setProposerFilter] = useState("");
+  const [displayedProposals, setDisplayedProposals] = useState<Proposal[]>(proposals);
+  const [offset, setOffset] = useState<number>(proposals.length);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
+  
   const noop = () => {};
 
-  const filteredProposals =
-    activeTab === "all"
-      ? proposals
-      : proposals.filter((p) => p.status === activeTab);
+  // Fetch the total count once on mount
+  useEffect(() => {
+    let active = true;
+    getTotalProposals()
+      .then((total) => {
+        if (active) {
+          setTotalCount(total);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load total proposal count:", err);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Keep displayedProposals and offset in sync if initial proposals prop updates
+  useEffect(() => {
+    setDisplayedProposals(proposals);
+    setOffset(proposals.length);
+  }, [proposals]);
+
+  const hasMore = offset < totalCount;
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const pageSize = 20;
+      const raw = await getProposalsPaged(offset, pageSize);
+      const thresh = await getThreshold();
+      const mapped = raw.map((p) => mapProposal(p, thresh));
+
+      // Filter for history statuses: "executed", "expired", "revoked"
+      const historyItems = mapped.filter((p) =>
+        ["executed", "expired", "revoked"].includes(p.status)
+      );
+
+      setDisplayedProposals((prev) => [...prev, ...historyItems]);
+      setOffset((prev) => prev + pageSize);
+    } catch (err) {
+      console.error("Failed to load more proposals:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const filteredProposals = displayedProposals
+    .filter((p) => activeTab === "all" || p.status === activeTab)
+    .filter((p) =>
+      p.description.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .filter(
+      (p) =>
+        proposerFilter === "" ||
+        p.proposer.toLowerCase().includes(proposerFilter.toLowerCase())
+    );
 
   return (
     <>
@@ -38,7 +105,7 @@ export function HistoryPage({
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`text-xs px-3 py-1 rounded-md capitalize transition-colors ${
+              className={`text-xs px-3 py-1 rounded-md capitalize transition-colors focus:ring-2 focus:ring-zinc-400 focus:outline-none ${
                 activeTab === tab.key
                   ? "bg-zinc-700 text-white"
                   : "text-zinc-400 hover:text-zinc-200"
@@ -49,10 +116,50 @@ export function HistoryPage({
           ))}
         </div>
       </div>
+
+      <div className="mb-4">
+        <input
+          type="text"
+          value={proposerFilter}
+          onChange={(e) => setProposerFilter(e.target.value)}
+          placeholder="Filter by proposer…"
+          aria-label="Filter by proposer"
+          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-white text-sm placeholder-zinc-600 focus:ring-2 focus:ring-zinc-400 focus:outline-none focus:border-zinc-700 transition-colors"
+        />
+      </div>
+
+      <div className="mb-4 relative">
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search by description…"
+          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-2 text-white text-sm placeholder-zinc-600 focus:ring-2 focus:ring-zinc-400 focus:outline-none focus:border-zinc-700 transition-colors"
+        />
+        <div className="absolute left-3 top-2.5 text-zinc-600">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+            className="w-4 h-4"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602Z"
+            />
+          </svg>
+        </div>
+      </div>
+
       <div className="space-y-3">
         {filteredProposals.length === 0 ? (
           <p className="text-zinc-600 text-sm py-8 text-center">
-            No {activeTab === "all" ? "" : `${activeTab} `}proposals found
+            {searchTerm || proposerFilter
+              ? "No proposals match your search"
+              : `No ${activeTab === "all" ? "" : `${activeTab} `}proposals found`}
           </p>
         ) : (
           filteredProposals.map((proposal) => (
@@ -67,6 +174,29 @@ export function HistoryPage({
           ))
         )}
       </div>
+
+      {hasMore && (
+        <div className="flex justify-center mt-6">
+          <button
+            type="button"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-medium text-zinc-300 hover:text-white transition-all flex items-center justify-center gap-2 focus:ring-2 focus:ring-zinc-400 focus:outline-none"
+          >
+            {loadingMore ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span>Loading proposals...</span>
+              </>
+            ) : (
+              "Load More"
+            )}
+          </button>
+        </div>
+      )}
     </>
   );
 }

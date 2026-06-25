@@ -1,6 +1,8 @@
+import { useState } from "react";
 import type { Proposal } from "../types/accord";
 import { ApprovalBar } from "./ApprovalBar";
 import { StatusBadge } from "./StatusBadge";
+import { Copy, Check } from "lucide-react";
 
 type ProposalCardProps = {
   proposal: Proposal;
@@ -18,6 +20,23 @@ export function ProposalCard({
   onRevoke,
 }: ProposalCardProps) {
   const connected = !!walletAddress;
+  const showApprove = proposal.status === "pending" && !proposal.userHasApproved;
+
+  // Logic to copy the address to clipboard and show a temporary "copied/checked" icon
+  const [copied, setCopied] = useState(false);
+
+  const copyAddress = async (address: string) => {
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 hover:border-zinc-700 transition-colors">
@@ -32,6 +51,26 @@ export function ProposalCard({
           <p className="text-zinc-500 text-sm font-mono mt-0.5">
             → {proposal.to}
           </p>
+          {/* The proposer's address */}
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-zinc-500 text-sm font-mono">
+              Proposed by → {proposal.proposer.slice(0, 6)}...
+              {proposal.proposer.slice(-4)}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => copyAddress(proposal.proposer)}
+              className="text-zinc-500 hover:text-zinc-700 transition-colors cursor-pointer focus:ring-2 focus:ring-zinc-400 focus:outline-none rounded"
+              title={copied ? "Copied!" : "Copy address"}
+            >
+              {copied ? (
+                <Check size={16} className="text-green-500" />
+              ) : (
+                <Copy size={16} />
+              )}
+            </button>
+          </div>
           {proposal.description && (
             <p className="text-zinc-500 text-xs mt-1.5 leading-relaxed max-w-sm">
               {proposal.description}
@@ -47,13 +86,14 @@ export function ProposalCard({
         <div className="flex items-center gap-2">
           <span className="text-xs text-zinc-600">{proposal.createdAt}</span>
 
-          {connected && !proposal.userHasApproved && proposal.status === "pending" && (
+          {showApprove && (
             <button
               type="button"
               onClick={() => onApprove(proposal.id)}
-              className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded-lg transition-colors font-medium disabled:opacity-50"
+              aria-label={connected ? `Approve proposal #${proposal.id}` : `Connect and approve proposal #${proposal.id}`}
+              className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded-lg transition-colors font-medium disabled:opacity-50 focus:ring-2 focus:ring-zinc-400 focus:outline-none"
             >
-              Approve
+              {connected ? "Approve" : "Connect & Approve"}
             </button>
           )}
 
@@ -61,20 +101,46 @@ export function ProposalCard({
             <button
               type="button"
               onClick={() => onRevoke(proposal.id)}
-              className="text-xs bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded-lg transition-colors font-medium disabled:opacity-50"
+              aria-label={`Revoke approval for proposal #${proposal.id}`}
+              className="text-xs bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded-lg transition-colors font-medium disabled:opacity-50 focus:ring-2 focus:ring-zinc-400 focus:outline-none"
             >
               Revoke
             </button>
           )}
 
-          {connected && proposal.status === "ready" && (
+          {connected && proposal.status === "ready" && !awaitingConfirmation && (
             <button
               type="button"
               onClick={() => onExecute(proposal.id)}
-              className="text-xs bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded-lg transition-colors font-medium disabled:opacity-50"
+              aria-label={`Execute proposal #${proposal.id}`}
+              className="text-xs bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded-lg transition-colors font-medium disabled:opacity-50 focus:ring-2 focus:ring-zinc-400 focus:outline-none"
+              onClick={() => setAwaitingConfirmation(true)}
             >
               Execute
             </button>
+          )}
+
+          {connected && proposal.status === "ready" && awaitingConfirmation && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-400">Send this transaction?</span>
+              <button
+                type="button"
+                onClick={() => {
+                  onExecute(proposal.id);
+                  setAwaitingConfirmation(false);
+                }}
+                className="text-xs bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded-lg transition-colors font-medium"
+              >
+                Confirm
+              </button>
+              <button
+                type="button"
+                onClick={() => setAwaitingConfirmation(false)}
+                className="text-xs bg-zinc-700 hover:bg-zinc-600 text-white px-3 py-1 rounded-lg transition-colors font-medium"
+              >
+                Cancel
+              </button>
+            </div>
           )}
         </div>
       </div>
