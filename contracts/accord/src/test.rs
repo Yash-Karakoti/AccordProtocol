@@ -1566,3 +1566,82 @@ fn cancel_expired_unblocks_active_cap() {
         &token_client.address, &str(&env, "new"), &(DEADLINE + 86_400), &ProposalCategory::Transfer);
     assert_eq!(new_id, 51);
 }
+
+// ─── Add-Owner Proposals ───────────────────────────────────────────────────────
+
+#[test]
+fn add_owner_full_lifecycle() {
+    let (env, client, owner_a, owner_b, owner_c, non_owner, _) = setup(2);
+
+    // The future owner is not part of the set yet.
+    assert!(!client.is_owner(&non_owner));
+
+    let id = client.create_add_owner_proposal(
+        &owner_a,
+        &non_owner,
+        &str(&env, "Add a fourth owner"),
+        &DEADLINE,
+    );
+    assert_eq!(client.get_proposal(&id).status, ProposalStatus::Pending);
+
+    client.approve(&owner_a, &id);
+    client.approve(&owner_b, &id);
+    assert_eq!(client.get_proposal(&id).status, ProposalStatus::Ready);
+
+    client.execute(&owner_c, &id);
+    assert_eq!(client.get_proposal(&id).status, ProposalStatus::Executed);
+
+    // The new owner now appears in the owner set.
+    let owners = client.get_owners();
+    assert_eq!(owners.len(), 4);
+    assert!(owners.contains(&non_owner));
+    assert!(client.is_owner(&non_owner));
+}
+
+#[test]
+fn create_add_owner_proposal_rejects_existing_owner() {
+    let (env, client, owner_a, owner_b, _, _, _) = setup(2);
+
+    // owner_b is already an owner, so proposing to add them is rejected.
+    assert_eq!(
+        client.try_create_add_owner_proposal(
+            &owner_a,
+            &owner_b,
+            &str(&env, "Re-add an existing owner"),
+            &DEADLINE,
+        ),
+        Err(Ok(ContractError::DuplicateOwner))
+    );
+}
+
+#[test]
+fn create_add_owner_proposal_rejects_at_max_owners() {
+    let env = Env::default();
+    env.mock_all_auths();
+    set_timestamp(&env, NOW);
+
+    let contract_id = env.register(AccordContract, ());
+    let client = AccordContractClient::new(&env, &contract_id);
+
+    // Initialize with exactly MAX_OWNERS (20) owners.
+    let mut owners = Vec::new(&env);
+    let first_owner = Address::generate(&env);
+    owners.push_back(first_owner.clone());
+    for _ in 1..20 {
+        owners.push_back(Address::generate(&env));
+    }
+    client.initialize(&owners, &1, &0);
+    assert_eq!(client.get_owners().len(), 20);
+
+    // Adding a 21st owner would exceed the cap.
+    let new_owner = Address::generate(&env);
+    assert_eq!(
+        client.try_create_add_owner_proposal(
+            &first_owner,
+            &new_owner,
+            &str(&env, "Exceed the owner cap"),
+            &DEADLINE,
+        ),
+        Err(Ok(ContractError::InvalidOwners))
+    );
+}
