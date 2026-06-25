@@ -26,10 +26,11 @@ Please read the [README](./README.md) first for product context, architecture, a
 
 ## Code of conduct and collaboration
 
+This project follows the [Contributor Covenant Code of Conduct](./CODE_OF_CONDUCT.md). By participating, you agree to uphold its standards.
+
 - **Be respectful and constructive.** Review comments should focus on the change, not the person.
 - **Assume good intent** and prefer clear questions over assumptions.
 - **Keep discussions on-topic** in issues and pull requests (PRs).
-- If the project adopts a formal Code of Conduct later, it will supersede this section; until then, these expectations apply to all spaces where the project is discussed (issues, PRs, chats linked from the repo).
 
 Harassment, discrimination, or abusive behavior are not acceptable. Maintainers may remove disruptive content and, when necessary, block participation to protect contributors.
 
@@ -202,6 +203,10 @@ Understanding where code belongs reduces review churn and merge conflicts.
 
 ## Finding work and program participation
 
+### Project roadmap
+
+Check [`ROADMAP.md`](./ROADMAP.md) for an overview of upcoming milestones, targeted features, and acceptance criteria. The roadmap helps you understand what is planned versus already shipped and where your contribution would have the most impact.
+
 ### GitHub issues
 
 - Use **open issues** as the primary source of scoped work.
@@ -231,6 +236,32 @@ If an issue is labeled for Wave eligibility, treat the label as informational on
 6. **Respond to review feedback** in a timely way; it is normal to go through several review rounds.
 
 If you discover that an issue is **wrongly scoped** or **blocked**, comment on the issue early rather than investing days of work in the wrong direction.
+
+### What happens after you open a PR
+
+Once the pull request is open, maintainers will review it. You can expect a first review within a few days for non-trivial changes. Review comments appear directly on the PR under the "Files changed" tab or in the general conversation thread. A maintainer may also request a review from another contributor with domain expertise (for example, a contract change may be reviewed by someone familiar with Soroban patterns).
+
+### Review and merge criteria
+
+Before a PR is merged, reviewers check the following:
+
+- **Tests pass** — all CI checks (contract tests, frontend build, lint) are green.
+- **Scope matches the issue** — the PR addresses the linked issue without unrelated changes.
+- **Coding standards followed** — the change matches the style and patterns of surrounding code.
+- **Description is complete** — the PR includes what changed, why, how to verify, and any known follow-ups.
+- **Tests added or updated** — behavior changes include test coverage where applicable.
+
+Once all criteria are met, a maintainer will approve the PR and merge it into `main`. PRs that require significant changes may go through several review rounds before approval.
+
+### Handling review feedback
+
+When a reviewer requests changes, push follow-up commits to the same branch. The new commits appear automatically in the open PR. Use the "Resolve conversation" button on each review comment thread once you have addressed the feedback. If you disagree with a suggestion, respond with a counter-argument explaining your reasoning — constructive back-and-forth is expected and welcome. If the discussion reaches an impasse, the maintainer makes the final call.
+
+### After your PR merges
+
+- The feature branch can be deleted (GitHub offers this automatically for branches in the same repo).
+- Your name and avatar appear in the commit history of the repository.
+- The change will be included in the next release — check [`CHANGELOG.md`](./CHANGELOG.md) for the version that ships your contribution.
 
 ---
 
